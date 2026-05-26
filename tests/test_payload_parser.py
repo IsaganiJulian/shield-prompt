@@ -14,7 +14,7 @@ import json
 
 import pytest
 
-from core.payload_parser import (
+from src.core.payload_parser import (
     FieldClassification,
     ParsedField,
     ParseResult,

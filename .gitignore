@@ -65,3 +65,28 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Old directories (keep for reference)
+core/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment
+.env
+.venv
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data
+logs/
+data/
+

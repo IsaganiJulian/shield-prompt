@@ -7,7 +7,7 @@ Validates encoding detection, Unicode normalization, and obfuscation removal.
 import base64
 import logging
 import pytest
-from core.preprocessor import InputNormalizer, NormalizationMetadata
+from src.core.preprocessor import InputNormalizer, NormalizationMetadata
 
 logger = logging.getLogger(__name__)
 

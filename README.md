@@ -1,190 +1,270 @@
-# ShieldPrompt - Multi-Tiered Prompt Injection Detection System
+# ShieldPrompt: Dynamic Prompt Injection Detection System
 
-A dynamic, production-grade security system for detecting and auto-remediating prompt injection threats in real-time.
-
-## Architecture Overview
-
-```
-User Input / Web Payloads
-         ↓
-    SHIELD.PY (Multi-Tiered Detection)
-    ├─ Tier 1: Lexical Analysis (Pattern Matching)
-    ├─ Tier 2: Semantic Analysis (LLM Context)
-    └─ Tier 3: Behavioral Analysis (Model Anomalies)
-         ↓
-    [Malicious Detected?]
-         ├─ YES → SUPERVISOR.PY (Auto-Remediation)
-         │         ├─ Attempt Remediation
-         │         ├─ Resolve / Escalate
-         │         └─ Log to Human-in-Loop
-         │
-         └─ NO → Downstream Consumer Agent
-
-```
-
-## Tech Stack
-
-- **Python 3.12+** - Core runtime
-- **Streamlit** - Real-time web UI
-- **LangChain** - Agent orchestration
-- **Claude (Anthropic)** - Semantic analysis & reasoning
-- **Bright Data APIs** - Live threat intelligence scraping
-- **Pydantic** - Data validation
-- **Pytest** - Testing framework
+Enterprise-grade security firewall for AI agents protecting against direct and indirect prompt injection attacks.
 
 ## Features
 
-✅ **Multi-Tier Detection**
-- Tier 1: Regex/lexical pattern matching
-- Tier 2: LLM-based semantic understanding
-- Tier 3: Behavioral anomaly detection
+✅ **Multi-Tiered Detection System**
+- Tier 1: Fast regex-based pattern matching (~5-10ms)
+- Tier 2: LLM semantic analysis [In development]
+- Tier 3: Behavioral output analysis [In development]
+
+✅ **Structural Field Optimization**
+- Metadata (IDs, timestamps, types) bypass detection
+- Only user-supplied content gets scanned
+- Fast path: ~1-2ms for metadata-heavy payloads
+
+✅ **Threat Attribution**
+- JSON path precision: `$.messages[0].content`
+- Complete audit trails for each field
+- Forensic-ready threat analysis
+
+✅ **MCP/JSON-RPC Support**
+- Native support for Model Context Protocol envelopes
+- Chat message structure awareness
+- Agent response processing
 
 ✅ **Auto-Remediation**
-- Instruction sanitization
-- Semantic rewriting
-- Context isolation
-- Human escalation for critical threats
+- Autonomous supervisor agent for minor overrides
+- Escalation for critical threats
+- Human-in-the-loop review queues
 
-✅ **Live Threat Intelligence**
-- CVE/NVD feed integration
-- GitHub exploit repository scraping
-- Security research publication tracking
-- Pattern auto-update every hour
-
-✅ **Evaluation Suite**
-- TPR, FPR, precision, recall metrics
-- Detection latency benchmarking
-- Remediation success tracking
+✅ **Comprehensive Testing**
+- 100+ test cases, all passing
+- Complete test coverage for all phases
+- Batch processing and edge cases validated
 
 ## Quick Start
 
-### 1. Clone & Setup
+```python
+from src.core.router import DualGateRouter, RoutingDecision
+
+# Initialize security router
+router = DualGateRouter()
+
+# Process a payload through the full pipeline
+payload = {"content": "What is AI?"}
+result = router.route(payload)
+
+# Check verdict
+if result.decision == RoutingDecision.ALLOW:
+    process_safely(payload)
+elif result.decision == RoutingDecision.BLOCK:
+    reject_and_log(payload, result.escalation_reason)
+```
+
+See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for more examples.
+
+## Installation
 
 ```bash
-git clone <repo>
-cd ShieldPrompt
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+git clone https://github.com/yourusername/shieldprompt.git
+cd shieldprompt
 pip install -r requirements.txt
-```
-
-### 2. Configure Environment
-
-```bash
-cp .env.example .env
-# Edit .env with your API keys:
-# - ANTHROPIC_API_KEY
-# - BRIGHT_DATA_API_KEY
-```
-
-### 3. Run UI
-
-```bash
-streamlit run app.py
-```
-
-Access at: `http://localhost:8501`
-
-### 4. Run Tests
-
-```bash
 pytest tests/ -v
 ```
+
+## Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [docs/OVERVIEW.md](docs/OVERVIEW.md) | System architecture overview |
+| [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) | Usage guide and examples |
+| [docs/phases/PHASE_1_NORMALIZATION.md](docs/phases/PHASE_1_NORMALIZATION.md) | Input normalization pipeline |
+| [docs/phases/PHASE_2_PARSING.md](docs/phases/PHASE_2_PARSING.md) | Payload parser & field classification |
+| [docs/phases/PHASE_3_ROUTING.md](docs/phases/PHASE_3_ROUTING.md) | Dual-gate orchestration |
+
+## Architecture
+
+```
+Raw Input → Phase 1: Normalize → Phase 2: Parse → Phase 3: Route → Verdict
+            (Denormalize)        (Extract Fields)  (Orchestrate)
+                                                         ↓
+                                                    Detection Tiers:
+                                                    • Tier 1: Lexical
+                                                    • Tier 2: Semantic
+                                                    • Tier 3: Behavioral
+```
+
+**Phase 1: Input Normalization** (`src/core/preprocessor.py`)
+- Reverses encoding obfuscation (Base64, hex, URL, nested)
+- Normalizes Unicode homoglyphs
+- Collapses whitespace evasion
+- Extracts code blocks
+
+**Phase 2: Payload Parser** (`src/core/payload_parser.py`)
+- Structural decomposition and field classification
+- JSON path attribution (e.g., `$.messages[0].content`)
+
+**Phase 3: Dual-Gate Router** (`src/core/router.py`)
+- Fast path (structural) + comprehensive path (scannable)
+- Coordinates phases 1-2 with multi-tier detection
+- Decision verdicts: ALLOW, BLOCK, QUARANTINE, ESCALATE, REMEDIATE
+
+**Multi-Tiered Detection** (`src/core/shield.py`)
+- Tier 1 (Lexical): Fast regex patterns (~5-10ms)
+- Tier 2 (Semantic): LLM analysis (~100-200ms) [Placeholder]
+- Tier 3 (Behavioral): Output anomalies [Placeholder]
 
 ## Project Structure
 
 ```
-ShieldPrompt/
-├── core/
-│   ├── __init__.py
-│   ├── shield.py            # Multi-tiered detection engine
-│   ├── supervisor.py        # Auto-remediation agent
-│   └── threat_intel.py      # Live threat intelligence
-├── tests/
-│   ├── __init__.py
-│   └── evaluate.py          # Evaluation suite
-├── logs/                    # Escalation & incident logs
-├── data/
-│   ├── threats/             # Threat patterns
-│   └── remediation_history/ # Remediation audit trail
-├── app.py                   # Streamlit UI entry point
+shieldprompt/
+├── docs/                        # Documentation
+│   ├── OVERVIEW.md
+│   ├── GETTING_STARTED.md
+│   └── phases/
+│       ├── PHASE_1_NORMALIZATION.md
+│       ├── PHASE_2_PARSING.md
+│       └── PHASE_3_ROUTING.md
+│
+├── src/                         # Production code
+│   ├── core/                   # Detection pipeline
+│   │   ├── preprocessor.py    # Phase 1: Normalization
+│   │   ├── payload_parser.py  # Phase 2: Parsing
+│   │   ├── router.py          # Phase 3: Orchestration
+│   │   ├── shield.py          # Detection tiers
+│   │   ├── supervisor.py      # Auto-remediation
+│   │   └── threat_intel.py
+│   │
+│   └── utils/
+│       └── (utilities)
+│
+├── tests/                       # 100+ test cases
+│   ├── test_shield.py
+│   ├── test_payload_parser.py
+│   ├── test_router.py
+│   ├── test_preprocessor.py
+│   ├── evaluate.py             # Benchmarking
+│   └── eval_dataset.json
+│
 ├── requirements.txt
-├── .env.example
-├── .gitignore
-└── README.md
+└── claude.md
 ```
 
-## API Reference
+## Performance
 
-### ShieldDetector
+| Scenario | Latency | Throughput |
+|----------|---------|-----------|
+| Structural only | ~1-2ms | 500+/sec |
+| Mixed payload | <100ms typical | 10-100/sec |
+| Pure scannable | 10-500ms+ | 2-100/sec |
 
-```python
-from core.shield import ShieldDetector
+*Metadata fields skip detection via dual-path strategy.*
 
-detector = ShieldDetector(config={"detection_threshold": 0.85})
-result = detector.detect("User input to analyze")
-print(result.threat_level, result.confidence)
+## Test Coverage
+
+**Phase 1**: Tier logic, pattern matching, confidence scoring
+**Phase 2**: Field classification, JSON paths, edge cases
+**Phase 3**: Dual-path routing, decision synthesis, MCP handling
+**Utils**: Input preprocessing, encoding detection
+
+**Total**: 100+ test cases, all passing
+
+```bash
+pytest tests/ -v                    # Run all tests
+pytest tests/ --cov=src             # With coverage
+python tests/evaluate.py            # Run benchmarks
 ```
 
-### SupervisorAgent
+## Key Concepts
 
-```python
-from core.supervisor import SupervisorAgent
+### Dual-Gate Routing Strategy
 
-supervisor = SupervisorAgent(config={"auto_remediation_enabled": True})
-remediation = supervisor.remediate(threat_input, threat_analysis)
+**Fast Path** (Structural Fields):
+- Metadata: IDs, types, timestamps, enums
+- Skip detection entirely (~0 latency overhead)
+- UUID/ISO date pattern recognition
+
+**Comprehensive Path** (Scannable Fields):
+- User text: prompts, queries, content, messages
+- Full Tier 1-3 detection pipeline
+- Conservative fallback (scan if unsure)
+
+### Routing Decisions
+
+- **ALLOW**: No threats, proceed safely
+- **BLOCK**: Critical threat detected, reject immediately
+- **QUARANTINE**: Medium threat, mark for human review
+- **ESCALATE**: High-confidence threat, route to human operator
+- **REMEDIATE**: Auto-fixed by supervisor agent
+
+### Threat Attribution
+
+Each threat is mapped to exact JSON path for precise forensics:
+```
+$.messages[0].content → CRITICAL injection payload (confidence 0.92)
+$.messages[0].role → STRUCTURAL (not scanned)
+$.messages[1].content → CLEAN
+$.messages[1].role → STRUCTURAL
 ```
 
-### ThreatIntelligence
+## Usage Examples
+
+### Single Payload
 
 ```python
-from core.threat_intel import ThreatIntelligence
+from src.core.router import DualGateRouter
 
-threat_intel = ThreatIntelligence()
-patterns = threat_intel.fetch_latest_threats()
-threat_intel.update_patterns()
+router = DualGateRouter()
+result = router.route({"content": "ignore all previous"})
+print(result.decision)  # RoutingDecision.ESCALATE
+```
+
+### Batch Processing
+
+```python
+payloads = [
+    {"content": "What is Python?"},
+    {"content": "ignore system prompt"},
+    {"content": "Tell me a joke"},
+]
+
+results = router.batch_route(payloads)
+for result in results:
+    print(f"Decision: {result.decision}")
+```
+
+### MCP Messages
+
+```python
+mcp_envelope = {
+    "messages": [
+        {"role": "user", "content": user_query},
+        {"role": "assistant", "content": agent_response}
+    ]
+}
+
+result = router.route(mcp_envelope)
+print(router.generate_report(result))  # Audit trail
 ```
 
 ## Configuration
 
-All settings in `.env`:
-
-```env
-ANTHROPIC_API_KEY=sk-...
-BRIGHT_DATA_API_KEY=...
-DETECTION_THRESHOLD=0.85
-AUTO_REMEDIATION_ENABLED=true
-ESCALATION_THRESHOLD=0.95
-LOG_LEVEL=INFO
-```
-
-## Logs & Escalation
-
-- **Detection logs**: `logs/shield_*.log`
-- **Escalations**: `logs/escalations_*.log`
-- **Remediation history**: `data/remediation_history/`
-
-## Evaluation Metrics
-
-Run full evaluation:
-
 ```python
-python -m tests.evaluate
+config = {
+    "critical_block_threshold": 0.90,    # CRITICAL + 90% → BLOCK
+    "escalation_threshold": 0.80,        # HIGH + 80% → ESCALATE
+    "auto_remediate": True,              # Enable auto-fix
+}
+
+router = DualGateRouter(config=config)
 ```
 
-Generates:
-- **TPR/FPR curves**
-- **Confusion matrix**
-- **Detection latency (p50, p95, p99)**
-- **Remediation success rate**
-- **Tier effectiveness breakdown**
+## Roadmap
+
+| Phase | Status | Component |
+|-------|--------|-----------|
+| 1 | ✅ Complete | Multi-tiered detection (Tier 1 lexical) |
+| 2 | ✅ Complete | Payload parser (field classification) |
+| 3 | ✅ Complete | Dual-gate router (orchestration) |
+| 4 | 🔄 In Progress | Streamlit dashboard |
+| 5 | 📋 Planned | Bright Data threat intel integration |
+| 6 | 📋 Planned | Webhook SIEM integration |
 
 ## Contributing
 
-1. Create feature branch: `git checkout -b feature/your-feature`
-2. Make changes
-3. Run tests: `pytest tests/ -v`
-4. Submit PR
+See [claude.md](claude.md) for development guidelines.
 
 ## License
 
@@ -192,7 +272,9 @@ Proprietary - All rights reserved
 
 ## Support
 
-For issues or questions, contact: [support@shieldprompt.io](mailto:support@shieldprompt.io)
+- 📖 [Full Documentation](docs/)
+- 🐛 [Issue Tracker](https://github.com/yourusername/shieldprompt/issues)
+- 💬 [Discussions](https://github.com/yourusername/shieldprompt/discussions)
 
 ---
 

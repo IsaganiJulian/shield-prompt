@@ -18,9 +18,9 @@ from dataclasses import dataclass
 # Ensure core scripts are findable if run directly from tests folder
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Updated import path(os.path.abspath(__file__))))
 
-from core.shield import ShieldDetector, ThreatLevel
+from src.core.shield import ShieldDetector, ThreatLevel
 
 # Configure local module logging
 logging.basicConfig(level=logging.INFO)

@@ -12,9 +12,9 @@ Test categories:
 """
 
 import pytest
-from core.router import DualGateRouter, RoutingDecision, FieldDetectionResult
-from core.shield import ShieldDetector, ThreatLevel
-from core.payload_parser import PayloadParser, FieldClassification
+from src.core.router import DualGateRouter, RoutingDecision, FieldDetectionResult
+from src.core.shield import ShieldDetector, ThreatLevel
+from src.core.payload_parser import PayloadParser, FieldClassification
 
 
 class TestDualGateRouter:
