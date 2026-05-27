@@ -9,6 +9,7 @@ Tiers:
 
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Dict, Any
@@ -92,22 +93,29 @@ class ShieldDetector:
 
         Detects common injection patterns, system prompt overrides, and adversarial syntax.
         """
+        # Normalize Unicode to prevent homoglyph/variant obfuscation
+        normalized_input = self._normalize_unicode_for_detection(user_input)
+
         # Compile Core Heuristic Signatures (Case-Insensitive Regex)
         lexical_signatures = {
             "system_override": r"ignore\s+all\s+previous\s+instructions",
-            "instruction_ignore": r"ignore\s+system\s+(prompt|rule|direction|constraint)",
+            "instruction_ignore": r"ignore\s+.*?\s+(system|your\s+system)\s+(prompt|rule|direction|constraint|instruction)",
+            "ignore_variant": r"igno[ur]+e\s+(your|my|the|all)",
+            "ignore_your": r"ignore\s+(your|my|the)\s+",
             "jailbreak_roleplay": r"you\s+are\s+now\s+an\s+unmoderated|act\s+as\s+a\s+developer\s+tool",
             "security_disregard": r"disregard\s+the\s+safety\s+guidelines|bypass\s+restrictions",
-            "credential_harvest": r"reveal\s+your\s+system\s+prompt|print\s+your\s+master\s+password",
+            "credential_harvest": r"reveal\s+your\s+system\s+prompt|print\s+your\s+master\s+password|print\s+the\s+secret",
             "adversarial_dan": r"\b(dan|jailbreak|unrestricted)\s+mode\b",
-            "obfuscation_attempt": r"encode\s+your\s+response\s+in\s+(base64|hex|rot13)"
+            "obfuscation_attempt": r"encode\s+your\s+response\s+in\s+(base64|hex|rot13)",
+            "generic_instruction_override": r"ignore.*?instructions?",
+            "inject_marker": r"^(inject|INJECT)[\s:]*",
         }
 
         matched_signatures = []
 
-        # Evaluate input against patterns
+        # Evaluate normalized input against patterns
         for signature_name, pattern in lexical_signatures.items():
-            if re.search(pattern, user_input, re.IGNORECASE):
+            if re.search(pattern, normalized_input, re.IGNORECASE):
                 matched_signatures.append({
                     "signature_name": signature_name,
                     "matched_pattern": pattern
@@ -149,6 +157,24 @@ class ShieldDetector:
             },
             original_input=user_input
         )
+
+    def _normalize_unicode_for_detection(self, text: str) -> str:
+        """
+        Normalize Unicode homoglyphs and variants to prevent obfuscation attacks.
+
+        Uses NFKD decomposition to collapse Unicode variants (e.g., 𝕴 → I, ⅰ → i)
+        and removes zero-width characters.
+        """
+        # NFKD normalization: compatibility decomposition
+        normalized = unicodedata.normalize("NFKD", text)
+
+        # Remove control characters and format characters
+        cleaned = "".join(
+            c for c in normalized
+            if unicodedata.category(c) not in ("Cc", "Cf") or c in ("\t", "\n")
+        )
+
+        return cleaned
 
     def _tier2_semantic_analysis(self, user_input: str) -> DetectionResult:
         """

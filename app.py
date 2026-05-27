@@ -6,10 +6,20 @@ Multi-tiered Prompt Injection Detection System with Auto-Remediation
 
 import logging
 import os
+import json
 from typing import Optional
 
 import streamlit as st
 from dotenv import load_dotenv
+
+from src.dashboard.components import (
+    render_header_section,
+    render_metrics_row,
+    render_payload_visualizer,
+    render_dark_theme_css,
+)
+from src.dashboard.mock_data import generate_initial_metrics, update_metrics
+from core.payload_parser import PayloadParser
 
 # PLACEHOLDER: Import core modules
 # from core.shield import ShieldDetector, DetectionResult, ThreatLevel
@@ -38,6 +48,12 @@ def initialize_session_state():
 
     if "detection_history" not in st.session_state:
         st.session_state.detection_history = []
+
+    if "metrics" not in st.session_state:
+        st.session_state.metrics = generate_initial_metrics()
+
+    if "payload_parser" not in st.session_state:
+        st.session_state.payload_parser = PayloadParser()
 
 
 def render_sidebar():
@@ -81,8 +97,9 @@ def render_sidebar():
 
 
 def render_detection_page():
-    """Render main detection interface."""
-    st.title("🛡️ ShieldPrompt - Threat Detection")
+    """Render main detection interface with metrics and payload visualizer."""
+    render_header_section()
+    render_metrics_row(st.session_state.metrics)
 
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -104,6 +121,18 @@ def render_detection_page():
             return
 
         with st.spinner("Running multi-tier detection..."):
+            try:
+                # Try to parse as JSON/MCP payload
+                payload_data = json.loads(user_input)
+                parse_result = st.session_state.payload_parser.parse(payload_data)
+                render_payload_visualizer(parse_result)
+            except json.JSONDecodeError:
+                # Treat as plain text
+                st.info("Plain text input (not JSON). Running threat detection...")
+
+            # Update metrics
+            st.session_state.metrics = update_metrics(st.session_state.metrics)
+
             # PLACEHOLDER: Call detector.detect(user_input)
             # detection_result = st.session_state.detector.detect(user_input)
 
@@ -230,6 +259,7 @@ def main():
         initial_sidebar_state="expanded"
     )
 
+    render_dark_theme_css()
     initialize_session_state()
 
     mode, detection_threshold, auto_remediation = render_sidebar()
