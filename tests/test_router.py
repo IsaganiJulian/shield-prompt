@@ -271,8 +271,8 @@ class TestDualGateRouter:
 
         assert len(result.audit_trail) > 0
         assert any("PARSING" in line for line in result.audit_trail)
-        assert any("FAST PATH" in line for line in result.audit_trail)
-        assert any("COMPREHENSIVE PATH" in line for line in result.audit_trail)
+        assert any("STRUCTURAL" in line for line in result.audit_trail)
+        assert any("SCANNABLE" in line for line in result.audit_trail)
 
     def test_audit_trail_includes_decision(self, router):
         """Audit trail should include final decision."""
