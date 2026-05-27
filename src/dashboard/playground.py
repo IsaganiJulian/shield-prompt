@@ -11,9 +11,9 @@ import streamlit as st
 import time
 from typing import Dict, Tuple, Optional
 
-from core.router import DualGateRouter, RoutingDecision
-from core.preprocessor import InputNormalizer
-from core.payload_parser import PayloadParser
+from src.core.router import DualGateRouter, RoutingDecision
+from src.core.preprocessor import InputNormalizer
+from src.core.payload_parser import PayloadParser
 from src.dashboard.mock_data import SAMPLE_INJECTION_PAYLOADS, SAMPLE_SAFE_QUERIES
 from src.dashboard.forensics import add_audit_entry, initialize_forensic_state
 

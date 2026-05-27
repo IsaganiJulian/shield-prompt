@@ -28,8 +28,8 @@ from src.dashboard.forensics import (
     initialize_forensic_state,
 )
 from src.dashboard.mock_data import generate_initial_metrics, update_metrics
-from core.payload_parser import PayloadParser
-from core.router import DualGateRouter
+from src.core.payload_parser import PayloadParser
+from src.core.router import DualGateRouter
 
 
 def initialize_session_state():

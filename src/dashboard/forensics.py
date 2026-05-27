@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict
 from enum import Enum
 
-from core.router import RoutingDecision
+from src.core.router import RoutingDecision
 
 
 class PayloadSourceType(Enum):

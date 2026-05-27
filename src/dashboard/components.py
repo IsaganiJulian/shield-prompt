@@ -9,7 +9,7 @@ import random
 import streamlit as st
 from datetime import datetime
 from src.dashboard.mock_data import MetricsSnapshot
-from core.payload_parser import ParseResult, FieldClassification
+from src.core.payload_parser import ParseResult, FieldClassification
 
 
 def render_header_section():
