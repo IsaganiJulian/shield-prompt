@@ -28,6 +28,7 @@ from src.dashboard.forensics import (
     initialize_forensic_state,
 )
 from src.dashboard.mock_data import generate_initial_metrics, update_metrics
+from src.dashboard.threat_intelligence import render_threat_intel_page
 from src.core.payload_parser import PayloadParser
 from src.core.router import DualGateRouter
 
@@ -159,19 +160,6 @@ def render_evaluation_page():
             st.success("Evaluation complete!")
 
 
-def render_threat_intel_page():
-    """Threat intelligence mode."""
-    st.title("🔍 Threat Intelligence")
-    st.info("Live threat pattern updates from CVEs, GitHub, and security research.")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Fetch Latest Threats", use_container_width=True):
-            st.success("Threat patterns updated!")
-
-    with col2:
-        if st.button("View Pattern Stats", use_container_width=True):
-            st.info("Pattern statistics dashboard coming soon...")
 
 
 if __name__ == "__main__":
