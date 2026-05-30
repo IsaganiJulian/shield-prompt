@@ -15,10 +15,13 @@ import time
 from typing import List, Dict, Any, Tuple
 from dataclasses import dataclass
 
-# Ensure core scripts are findable if run directly from tests folder
 import sys
 import os
-# Updated import path(os.path.abspath(__file__))))
+from pathlib import Path
+
+project_root = Path(__file__).resolve().parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from src.core.shield import ShieldDetector, ThreatLevel
 

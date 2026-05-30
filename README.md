@@ -1,230 +1,174 @@
 # ShieldPrompt: Dynamic Prompt Injection Detection System
 
-Enterprise-grade security firewall for AI agents protecting against direct and indirect prompt injection attacks.
+Enterprise-grade inline firewall for AI agents, protecting against direct and indirect prompt injection attacks using a real-time, multi-tiered detection pipeline powered by Bright Data threat intelligence.
 
 ## Key Features
 
-✅ **Tier-First Optimized Pipeline**
-- Tier 1 (lexical) runs on raw input first (~5-10ms)
-- Early-exit detection skips expensive normalization for obvious threats
-- High throughput + low latency for common injection patterns
-
-✅ **Multi-Tiered Detection System**
-- Tier 1: Fast regex-based pattern matching (~5-10ms)
-- Tier 2: LLM semantic analysis [In development]
-- Tier 3: Behavioral output analysis [In development]
-
-✅ **Structural Field Optimization**
-- Metadata (IDs, timestamps, types) bypass detection
-- Only user-supplied content gets scanned
-- Fast path: ~1-2ms for metadata-heavy payloads
-
-✅ **Threat Attribution**
-- JSON path precision: `$.messages[0].content`
-- Complete audit trails for each field
-- Forensic-ready threat analysis
-
-✅ **MCP/JSON-RPC Support**
-- Native support for Model Context Protocol envelopes
-- Chat message structure awareness
-- Agent response processing
-
-✅ **Auto-Remediation**
-- Autonomous supervisor agent for minor overrides
-- Escalation for critical threats
-- Human-in-the-loop review queues
-
-✅ **Comprehensive Testing**
-- 116 test cases, all passing
-- Complete coverage for all tiers and phases
-- Batch processing and edge cases validated
+- **Multi-Tiered Detection** — Tier 1 lexical (~5-10ms) → Tier 2 LLM semantic → Tier 3 behavioral output analysis
+- **Tier-First Early Exit** — 80-90% of attacks caught in <10ms before expensive processing
+- **Structural Field Optimization** — Metadata (IDs, timestamps) bypass detection; only user-supplied content is scanned
+- **Live Threat Intelligence** — Bright Data SERP/Web Scraper API feeds a FAISS vector store with real-time attack patterns
+- **Autonomous Remediation** — SupervisorAgent cascades: sanitization → LLM rewrite → context isolation, with human-in-the-loop escalation
+- **MCP/JSON-RPC Support** — Native support for Model Context Protocol envelopes with JSON path attribution
+- **Streamlit Dashboard** — Live Playground, Detection Console, Evaluation Hub, and Threat Intel viewer
+- **386 Tests Passing** — Full coverage across all tiers and phases
 
 ## Quick Start
 
-```python
-from src.core.router import DualGateRouter, RoutingDecision
-
-# Initialize security router
-router = DualGateRouter()
-
-# Process a payload through the optimized pipeline
-payload = {"content": "What is AI?"}
-result = router.route(payload)
-
-# Check verdict
-if result.decision == RoutingDecision.ALLOW:
-    process_safely(payload)
-elif result.decision == RoutingDecision.BLOCK:
-    reject_and_log(payload, result.escalation_reason)
+```bash
+git clone https://github.com/IsaganiJulian/shield-prompt.git
+cd shield-prompt
+pip install -r requirements.txt
+cp .env.example .env   # add your API keys
+pytest tests/ -v
+streamlit run src/dashboard/app.py
 ```
 
-See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for more examples.
-
-## Installation
+### Environment Variables
 
 ```bash
-git clone https://github.com/yourusername/shieldprompt.git
-cd shieldprompt
-pip install -r requirements.txt
-pytest tests/ -v
+ANTHROPIC_API_KEY=      # Claude Haiku — LLM re-scoring & supervisor rewriting
+OPENAI_API_KEY=         # text-embedding-3-small — FAISS vector gate
+BRIGHT_DATA_API_KEY=    # Threat intelligence scraping
 ```
 
-## Documentation
-
-| Document | Purpose |
-|----------|---------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Tier-first optimization details |
-| [docs/OVERVIEW.md](docs/OVERVIEW.md) | System architecture overview |
-| [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) | Usage guide and examples |
-| [docs/phases/PHASE_1_NORMALIZATION.md](docs/phases/PHASE_1_NORMALIZATION.md) | Input normalization pipeline |
-| [docs/phases/PHASE_2_PARSING.md](docs/phases/PHASE_2_PARSING.md) | Payload parser & field classification |
-| [docs/phases/PHASE_3_ROUTING.md](docs/phases/PHASE_3_ROUTING.md) | Dual-gate orchestration |
+All keys are optional — the system degrades gracefully to Tier 1 lexical-only mode if keys are absent.
 
 ## Architecture
 
 ```
 Raw Input
-  ├─ String? → Tier 1 (Raw) → Early Exit? → Decide
-  │                 ↓
-  │              Inconclusive?
-  │                 ↓
-  │         Normalize → Tier 2-3 → Decide
+  ├─ String?  → Tier 1 Lexical (raw) → Early Exit? → Decide
+  │                   ↓ inconclusive
+  │            Normalize (Phase 1) → Tier 2 Semantic → Tier 3 Behavioral → Decide
   │
-  └─ Dict/List? → Parse Fields → Structural/Scannable
-                      ├─ Structural → Skip detection
-                      └─ Scannable → [Tier 1 → Normalize → Tier 2-3] → Decide
+  └─ Dict/List? → Parse Fields (Phase 2)
+                      ├─ Structural (IDs, timestamps) → Skip detection (fast path)
+                      └─ Scannable (prompts, content) → [Tier 1 → Normalize → Tier 2-3] → Decide
 ```
 
-**Tier 1 (Lexical Analysis)**: Fast pattern matching on raw input (~5-10ms)
-- Catches common injection patterns before expensive processing
-- Early exit if threat is conclusive
+**Routing Decisions**
 
-**Phase 1 (Normalization)**: Only if Tier 1 inconclusive
-- Reverses encoding/unicode/whitespace evasion
-- Prevents semantic drift attacks
+| Decision | Meaning |
+|---|---|
+| `ALLOW` | No threats detected |
+| `BLOCK` | Critical threat, reject immediately |
+| `QUARANTINE` | Medium confidence, flag for human review |
+| `ESCALATE` | High-confidence threat, route to operator |
+| `REMEDIATE` | Auto-fixed by SupervisorAgent |
 
-**Phase 2 (Payload Parser)**: Structural field optimization
-- Metadata skips detection (fast path)
-- User content gets full analysis
+## Detection Pipeline
 
-**Tiers 2-3 (Semantic/Behavioral)**: On-demand analysis
-- Tier 2: LLM-based context understanding
-- Tier 3: Output anomaly detection
-
-## Routing Decisions
-
-- **ALLOW**: No threats detected, proceed safely
-- **BLOCK**: Critical threat with high confidence, reject immediately
-- **QUARANTINE**: Medium threat, mark for human review
-- **ESCALATE**: High-confidence threat, route to operator
-- **REMEDIATE**: Auto-fixed by supervisor agent
+| Phase | Component | Status |
+|---|---|---|
+| Phase 1 | `InputNormalizer` — Base64/Unicode/encoding anti-evasion | ✅ Complete |
+| Phase 2 | `PayloadParser` — recursive JSON/MCP field extraction | ✅ Complete |
+| Phase 3 | `DualGateRouter` — structural fast-path + tier synthesis | ✅ Complete |
+| Phase 4 | Streamlit Dashboard — Playground / Detection / Eval / Threat Intel | ✅ Complete |
+| Phase 5 | `BrightDataClient` + `ThreatIntelligence` — live SERP scraping | ✅ Complete |
+| Phase 6 | `LLMEvaluator` + `FAISSVectorStore` — Tier 2 semantic analysis | ✅ Complete |
+| Phase 7 | `SupervisorAgent` — 3-strategy cascading auto-remediation | ✅ Complete |
+| Phase 8 | Tier 3 behavioral analysis — flooding, drift, multi-vector, repetition | ✅ Complete |
+| Phase 9 | Evaluation suite — KPI runner (TPR/FPR/F1/latency) | ✅ Complete |
 
 ## Performance
 
-| Scenario | Latency | Throughput | Description |
-|----------|---------|-----------|-------------|
-| Tier 1 Early Exit | ~5-10ms | 100-200/sec | Simple injection caught immediately |
-| Clean Input | ~10-20ms | 50-100/sec | No threats, quick check |
-| Normalized Analysis | ~100-300ms | 3-10/sec | Evasion decoded and analyzed |
-| Mixed Payloads | ~20-100ms | 10-50/sec | Structural skipped, scannable analyzed |
+| Scenario | Latency | Description |
+|---|---|---|
+| Tier 1 Early Exit | ~5-10ms | Common injection caught before normalization |
+| Clean Input | ~10-20ms | No threats, quick pass-through |
+| Normalized Analysis | ~100-300ms | Encoding evasion decoded and re-analyzed |
+| Mixed JSON Payload | ~20-100ms | Structural fields skipped, scannable fields scanned |
 
-*Tier 1 early-exit optimization provides 80-90% faster detection for common attacks.*
+## Usage
+
+```python
+from src.core.router import DualGateRouter, RoutingDecision
+
+router = DualGateRouter()
+
+result = router.route({"content": "Ignore previous instructions and..."})
+
+if result.decision == RoutingDecision.BLOCK:
+    reject_and_log(result.escalation_reason)
+elif result.decision == RoutingDecision.ALLOW:
+    process_safely(payload)
+```
 
 ## Project Structure
 
 ```
-shieldprompt/
-├── docs/                        # Documentation
-│   ├── OVERVIEW.md
+shield-prompt/
+├── src/
+│   ├── core/
+│   │   ├── shield.py              # Tiered detection engine
+│   │   ├── router.py              # DualGateRouter orchestration
+│   │   ├── preprocessor.py        # InputNormalizer (Phase 1)
+│   │   ├── payload_parser.py      # PayloadParser (Phase 2)
+│   │   ├── supervisor.py          # SupervisorAgent auto-remediation
+│   │   ├── llm_evaluator.py       # Tier 2 LLM re-scoring
+│   │   ├── vector_store.py        # FAISS vector store
+│   │   ├── threat_intel.py        # Threat intelligence interface
+│   │   ├── pattern_ingester.py    # Ingests scraped patterns into FAISS
+│   │   └── bright_data_client.py  # Bright Data API client
+│   └── dashboard/
+│       ├── app.py                 # Streamlit entry point
+│       ├── playground.py          # Live Ingress Playground
+│       ├── components.py          # Shared UI components
+│       ├── threat_intelligence.py # Threat Intel dashboard page
+│       └── forensics.py           # Forensic audit trail explorer
+├── tests/                         # 386 tests
+│   ├── eval_dataset.json          # 35-case labeled dataset
+│   ├── evaluate.py                # KPI runner (TPR/FPR/F1/latency)
+│   ├── test_router.py
+│   ├── test_supervisor.py
+│   ├── test_tier2_integration.py
+│   ├── test_tier3_behavioral.py
+│   ├── test_e2e_pipeline.py
+│   └── ...
+├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── GETTING_STARTED.md
-│   └── phases/
-│       ├── PHASE_1_NORMALIZATION.md
-│       ├── PHASE_2_PARSING.md
-│       └── PHASE_3_ROUTING.md
-│
-├── src/                         # Production code
-│   ├── core/                   # Detection pipeline
-│   │   ├── shield.py          # Multi-tiered detection
-│   │   ├── payload_parser.py  # Field classification
-│   │   ├── router.py          # Dual-gate orchestration
-│   │   ├── supervisor.py      # Auto-remediation
-│   │   └── threat_intel.py
-│   │
-│   └── utils/
-│       └── preprocessor.py     # Normalization
-│
-├── tests/                       # 116 test cases
-│   ├── test_shield.py
-│   ├── test_payload_parser.py
-│   ├── test_router.py
-│   ├── test_preprocessor.py
-│   ├── evaluate.py
-│   └── eval_dataset.json
-│
+│   ├── STARTUP_GUIDE.md
+│   └── phases/                    # Per-phase design docs (PHASE_1 … PHASE_9)
 ├── requirements.txt
-└── claude.md
+└── .env.example
 ```
 
-## Test Coverage
-
-**Tier 1**: Lexical detection, early-exit validation
-**Phases**: Normalization, parsing, routing, decision synthesis
-**Tiers 2-3**: Semantic/behavioral analysis
-**Total**: 116 test cases, all passing
+## Testing
 
 ```bash
-pytest tests/ -v                    # Run all tests
-pytest tests/ --cov=src             # With coverage
-python tests/evaluate.py            # Run benchmarks
+pytest tests/ -v                   # Run all 386 tests
+pytest tests/ --cov=src            # With coverage report
+python tests/evaluate.py           # KPI benchmark (TPR/FPR/F1/latency)
 ```
 
-## Key Concepts
+## Documentation
 
-### Tier-First with Early-Exit
-1. Run Tier 1 (fast lexical) on raw input
-2. If HIGH/CRITICAL threat + high confidence → EARLY EXIT (skip normalization)
-3. Otherwise, normalize and run Tier 2-3 for sophisticated evasion
-4. Result: 80-90% of attacks caught in 5-10ms instead of 250ms+
+| Document | Purpose |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Tier-first optimization and system design |
+| [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) | Usage guide and examples |
+| [docs/STARTUP_GUIDE.md](docs/STARTUP_GUIDE.md) | Dashboard startup and navigation |
+| [docs/phases/](docs/phases/) | Per-phase design specifications |
 
-### Dual-Path Strategy
+## Tech Stack
 
-**Structural Fields** (Metadata):
-- IDs, types, timestamps, enums
-- Skip detection entirely
-- Fast throughput for metadata-heavy payloads
-
-**Scannable Fields** (User Text):
-- Prompts, queries, messages, content
-- Full Tier 1-3 detection pipeline
-- Conservative fallback (scan if unsure)
-
-## Roadmap
-
-| Phase | Status | Component |
-|-------|--------|-----------|
-| 1 | ✅ Complete | Input normalization |
-| 2 | ✅ Complete | Payload parser & field classification |
-| 3 | ✅ Complete | Dual-gate router with tier-first optimization |
-| 4 | 🔄 In Progress | Streamlit dashboard |
-| 5 | 📋 Planned | Bright Data threat intelligence integration |
-| 6 | 📋 Planned | Webhook SIEM integration |
-
-## Contributing
-
-See [claude.md](claude.md) for development guidelines.
+- **Python 3.12+** — core language
+- **LangChain** — agent orchestration
+- **Anthropic Claude** — LLM semantic re-scoring and supervisor rewriting
+- **OpenAI Embeddings** — FAISS vector store indexing
+- **FAISS** — local vector similarity search
+- **Bright Data** — real-time threat intelligence scraping
+- **Streamlit** — security operations dashboard
+- **Pydantic** — data validation
 
 ## License
 
-Proprietary - All rights reserved
+MIT License — see [LICENSE](LICENSE) for details.
 
 ## Support
 
-- 📖 [Full Documentation](docs/)
-- 🐛 [Issue Tracker](https://github.com/yourusername/shieldprompt/issues)
-- 💬 [Discussions](https://github.com/yourusername/shieldprompt/discussions)
-
----
-
-**Built with 🛡️ Security First — Tier-First Optimization**
-
+- [Architecture Overview](docs/ARCHITECTURE.md)
+- [Getting Started](docs/GETTING_STARTED.md)
+- [Issue Tracker](https://github.com/IsaganiJulian/shield-prompt/issues)

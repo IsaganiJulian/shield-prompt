@@ -4,7 +4,7 @@
 
 ### 1. Verify Environment
 ```bash
-cd /Users/isaganijulian/Shield-Prompt
+cd shield-prompt
 
 # Check Python version (must be 3.12+)
 python --version
@@ -182,7 +182,7 @@ Right Panel (🔍 Pipeline Analysis Trace):
 ### Issue: "ModuleNotFoundError: No module named 'streamlit'"
 **Solution:**
 ```bash
-pip install streamlit pandas
+pip install streamlit pandas bottleneck
 source .venv/bin/activate
 ```
 
@@ -230,8 +230,8 @@ All dashboard components seamlessly integrate with ShieldPrompt core:
 ✅ **SupervisorAgent** (`core/supervisor.py`)
 - Auto-remediation results shown in Step 4
 
-✅ **Test Coverage** (116 tests)
-- All core modules tested via `tests/evaluate.py`
+✅ **Test Coverage** (386 tests)
+- All core modules tested via `pytest tests/ -v` (386 tests)
 - Dashboard uses same tested components
 
 ---

@@ -23,22 +23,54 @@ You are an expert DevSecOps and AI Safety Engineering Assistant. Your objective 
 Always respect and maintain this structure when creating or modifying files:
 
 ```text
-shieldprompt-hackathon/
+Shield-Prompt/
 │
-├── .env.example              # Credentials template (Bright Data, OpenAI)
-├── .gitignore                # Target folder exclusions
+├── CLAUDE.md                 # This system memory context file
+├── README.md                 # Project overview
 ├── requirements.txt          # Python package manifest
-├── claude.md                 # This system memory context file
+├── .env.example              # Credentials template (Bright Data, OpenAI, Anthropic)
 │
-├── core/                     # Backend Security Engines
+├── src/                      # All application source code
 │   ├── __init__.py
-│   ├── shield.py             # Tiered Inspections (Regex -> Vector -> LLM Eval)
-│   ├── supervisor.py         # Autonomous Remediation Agent
-│   └── threat_intel.py       # Bright Data Interface Script
+│   ├── core/                 # Backend Security Engines
+│   │   ├── __init__.py
+│   │   ├── shield.py         # Tiered detection (Tier 1 Lexical → Tier 2 Semantic → Tier 3 Behavioral)
+│   │   ├── supervisor.py     # Autonomous Remediation Agent (3-strategy cascading)
+│   │   ├── router.py         # DualGateRouter — structural fast-path + comprehensive scan
+│   │   ├── preprocessor.py   # InputNormalizer — Base64/Unicode/encoding anti-evasion (Phase 1)
+│   │   ├── payload_parser.py # PayloadParser — recursive JSON/MCP field extraction (Phase 2)
+│   │   ├── threat_intel.py   # ThreatIntelligence — Bright Data scraper interface
+│   │   ├── vector_store.py   # FAISSVectorStore — embedding-based pattern retrieval
+│   │   ├── llm_evaluator.py  # LLMEvaluator — LangChain/Anthropic Tier 2 re-scoring
+│   │   ├── pattern_ingester.py # Ingests scraped threat patterns into the vector store
+│   │   └── bright_data_client.py # Bright Data API client wrapper
+│   │
+│   └── dashboard/            # Streamlit Frontend
+│       ├── __init__.py
+│       ├── app.py            # Main Streamlit app (Playground / Detection / Evaluation / Threat Intel)
+│       ├── playground.py     # Live Ingress Playground + Output Scanner panel
+│       ├── components.py     # Shared UI components (header, metrics row, CSS)
+│       ├── forensics.py      # Forensic audit trail and session log explorer
+│       ├── mock_data.py      # Sample payloads and mock metrics generator
+│       └── threat_intelligence.py # Threat Intel dashboard page
 │
 ├── tests/                    # Security Evaluation Hub
 │   ├── __init__.py
-│   ├── eval_dataset.json     # Matrix of attacks and safe queries
-│   └── evaluate.py           # Programmatic KPI runner script
+│   ├── eval_dataset.json     # 35-case labeled dataset (malicious + benign)
+│   ├── evaluate.py           # EvaluationSuite — KPI runner (TPR/FPR/F1/latency)
+│   ├── test_e2e_pipeline.py  # End-to-end integration tests (5 scenarios, offline)
+│   ├── test_router.py        # DualGateRouter unit tests
+│   ├── test_supervisor.py    # SupervisorAgent unit tests
+│   ├── test_tier2_integration.py  # Tier 2 semantic analysis tests
+│   ├── test_tier3_behavioral.py   # Tier 3 behavioral + analyze_output() tests
+│   ├── test_payload_parser.py
+│   ├── test_preprocessor.py
+│   ├── test_vector_store.py
+│   ├── test_threat_intel.py
+│   ├── test_pattern_ingester.py
+│   └── test_bright_data_client.py
 │
-└── app.py                    # Streamlit Dashboard (Side-by-side Exploit UI)
+├── docs/                     # Phase specifications and architecture notes
+│   └── phases/               # Per-phase design documents (PHASE_1 … PHASE_9)
+│
+└── data/                     # Runtime data (vector index, scraped patterns, logs)

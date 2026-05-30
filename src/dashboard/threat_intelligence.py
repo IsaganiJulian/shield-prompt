@@ -51,19 +51,15 @@ _SOURCE_STYLES: Dict[str, tuple[str, str]] = {
 # ---------------------------------------------------------------------------
 
 def _get_threat_intel() -> Optional[Any]:
-    """Return cached ThreatIntelligence instance, creating it on first call."""
-    if "threat_intel" not in st.session_state:
-        try:
-            from src.core.threat_intel import ThreatIntelligence
-            st.session_state.threat_intel = ThreatIntelligence(
-                config={"use_mock_patterns": False}
-            )
-            st.session_state.threat_intel_error = None
-        except Exception as exc:
-            logger.warning("ThreatIntelligence init failed: %s", exc)
-            st.session_state.threat_intel = None
-            st.session_state.threat_intel_error = str(exc)
-    return st.session_state.threat_intel
+    """
+    Return the shared ThreatIntelligence instance seeded by app.py at startup.
+
+    The instance is created once via _build_threat_intel() (@st.cache_resource)
+    and stored in st.session_state.threat_intel so both the detection router
+    and this tab operate on the same pattern store.  Patterns fetched here are
+    immediately visible to the Tier 2 vector gate.
+    """
+    return st.session_state.get("threat_intel")
 
 
 def _init_page_state() -> None:
@@ -206,11 +202,11 @@ def _render_kpi_row(stats: Dict[str, Any]) -> None:
 
 def _render_feed_controls(ti: Any) -> None:
     """Live fetch + mock load buttons with result feedback."""
-    st.subheader("Feed Controls")
+    st.markdown('<div class="sp-section-label">FEED CONTROLS</div>', unsafe_allow_html=True)
     col_live, col_mock, col_export = st.columns(3)
 
     with col_live:
-        if st.button("Fetch Latest Threats", use_container_width=True, type="primary"):
+        if st.button("FETCH LATEST THREATS", use_container_width=True, type="primary"):
             with st.spinner("Querying Bright Data…"):
                 try:
                     result = ti.update_patterns(force=True)
@@ -231,7 +227,7 @@ def _render_feed_controls(ti: Any) -> None:
                     st.toast(f"Fetch failed: {exc}", icon="❌")
 
     with col_mock:
-        if st.button("Load Mock Patterns", use_container_width=True):
+        if st.button("LOAD MOCK PATTERNS", use_container_width=True):
             with st.spinner("Loading offline patterns…"):
                 try:
                     ti.load_mock_patterns()
@@ -243,7 +239,7 @@ def _render_feed_controls(ti: Any) -> None:
                     st.toast(f"Failed to load mocks: {exc}", icon="❌")
 
     with col_export:
-        if st.button("Prepare Export", use_container_width=True):
+        if st.button("PREPARE EXPORT", use_container_width=True):
             try:
                 from src.core.pattern_ingester import _pattern_to_dict
                 patterns = ti.ingester.get_patterns()
@@ -282,7 +278,7 @@ def _render_feed_controls(ti: Any) -> None:
 
 def _render_pattern_browser(ti: Any) -> None:
     """Filterable grid of ThreatPattern cards."""
-    st.subheader("Pattern Browser")
+    st.markdown('<div class="sp-section-label">PATTERN BROWSER</div>', unsafe_allow_html=True)
 
     filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
     with filter_col1:
@@ -352,7 +348,7 @@ def _render_pattern_browser(ti: Any) -> None:
 
 def _render_semantic_search(ti: Any, stats: Dict[str, Any]) -> None:
     """Semantic search over FAISS vector store."""
-    st.subheader("Semantic Pattern Search")
+    st.markdown('<div class="sp-section-label">SEMANTIC PATTERN SEARCH</div>', unsafe_allow_html=True)
 
     vector_info = stats.get("vector_store", {})
     if not vector_info.get("enabled", False):
@@ -381,7 +377,7 @@ def _render_semantic_search(ti: Any, stats: Dict[str, Any]) -> None:
             help="Only return results with cosine similarity ≥ this value",
         )
 
-    if st.button("Search Vector Index", type="primary"):
+    if st.button("SEARCH VECTOR INDEX", type="primary"):
         if not query.strip():
             st.warning("Enter a query to search.")
             return
@@ -433,7 +429,9 @@ def _render_raw_stats(stats: Dict[str, Any]) -> None:
 
 def render_threat_intel_page() -> None:
     """Full Threat Intelligence dashboard page."""
-    st.title("Threat Intelligence")
+    from src.dashboard.components import render_header_section
+    render_header_section()
+    st.markdown('<div class="sp-section-label">THREAT INTELLIGENCE</div>', unsafe_allow_html=True)
     st.caption("Live threat pattern updates from CVEs, GitHub advisory feeds, and security research via Bright Data.")
 
     _init_page_state()
