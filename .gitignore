@@ -66,8 +66,9 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# Old directories (keep for reference)
-core/
+# Old directories (keep for reference) — anchored to repo root so it does NOT
+# match src/core/ (the detection engine, which MUST be tracked).
+/core/
 
 # Python
 __pycache__/
