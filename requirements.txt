@@ -5,9 +5,6 @@ langchain-anthropic>=0.3.0
 langchain-community>=0.3.0
 langchain-core>=0.3.0
 anthropic>=0.50.0
-brightdata-sdk==2.3.1
-requests==2.31.0
-beautifulsoup4>=4.12.0
 pydantic>=2.7.0
 pydantic-settings>=2.2.0
 pyyaml==6.0.1

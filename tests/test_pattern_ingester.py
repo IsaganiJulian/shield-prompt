@@ -4,7 +4,6 @@ Unit tests for PatternIngester
 Tests cover:
   - Initialization with default and custom config
   - ingest(): new patterns, updates, severity rejection, invalid regex fallback
-  - ingest_from_client(): delegates to BrightDataClient.fetch_all_patterns
   - ingest_mock_patterns(): built-in offline patterns
   - get_patterns(): filtering by type, severity, age, source
   - get_stats(): correct counts by type / severity / source
@@ -171,26 +170,6 @@ class TestIngestionResult:
     def test_success_rate_zero_received(self):
         r = IngestionResult(0, 0, 0, 0, [], 0.0)
         assert r.success_rate == 1.0
-
-
-# ---------------------------------------------------------------------------
-# ingest_from_client()
-# ---------------------------------------------------------------------------
-
-class TestIngestFromClient:
-    def test_delegates_to_fetch_all_patterns(self, ingester):
-        mock_client = MagicMock()
-        mock_client.fetch_all_patterns.return_value = [_make_pattern()]
-        result = ingester.ingest_from_client(mock_client, limit_per_source=25)
-
-        mock_client.fetch_all_patterns.assert_called_once_with(25)
-        assert result.new_patterns == 1
-
-    def test_handles_empty_client_response(self, ingester):
-        mock_client = MagicMock()
-        mock_client.fetch_all_patterns.return_value = []
-        result = ingester.ingest_from_client(mock_client)
-        assert result.total_received == 0
 
 
 # ---------------------------------------------------------------------------

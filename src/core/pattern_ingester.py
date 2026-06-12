@@ -1,8 +1,8 @@
 """
-Pattern Ingester - Normalizes and persists ThreatPatterns from Bright Data.
+Pattern Ingester - Normalizes and persists ThreatPatterns.
 
 Pipeline position:
-    BrightDataClient -> PatternIngester -> [VectorStore (Step 3)]
+    dataset / mock seed -> PatternIngester -> VectorStore -> Shield Tier 2
 
 Responsibilities:
     - Validate and normalize incoming ThreatPatterns (compile regex, strip unsafe chars)
@@ -124,7 +124,7 @@ class IngestionResult:
 
 class PatternIngester:
     """
-    Normalizes, deduplicates, and persists ThreatPatterns from Bright Data.
+    Normalizes, deduplicates, and persists ThreatPatterns from a dataset or seed.
 
     Thread safety: single-threaded. Use external locking if shared.
     """
@@ -156,7 +156,7 @@ class PatternIngester:
         Normalize, validate, deduplicate, and store a batch of patterns.
 
         Args:
-            patterns: Raw ThreatPattern list (e.g., from BrightDataClient)
+            patterns: Raw ThreatPattern list (e.g., from a dataset or mock seed)
 
         Returns:
             IngestionResult with counts and error details
@@ -198,25 +198,6 @@ class PatternIngester:
             len(patterns), new_count, updated_count, rejected_count, duration_ms,
         )
         return result
-
-    def ingest_from_client(
-        self,
-        client: Any,
-        limit_per_source: int = 50,
-    ) -> IngestionResult:
-        """
-        Fetch patterns from all Bright Data sources and ingest them.
-
-        Args:
-            client: BrightDataClient instance
-            limit_per_source: Max patterns per source feed
-
-        Returns:
-            IngestionResult from this ingestion run
-        """
-        logger.info("Fetching patterns from BrightDataClient")
-        patterns = client.fetch_all_patterns(limit_per_source)
-        return self.ingest(patterns)
 
     def ingest_mock_patterns(self) -> IngestionResult:
         """Ingest built-in mock patterns for offline or CI use."""

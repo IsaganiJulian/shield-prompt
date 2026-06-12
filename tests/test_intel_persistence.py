@@ -1,12 +1,12 @@
 """
-Persistence, snapshot, and dynamic-signature tests (access-survival path).
+Persistence, snapshot, and dynamic-signature tests.
 
 All run offline with enable_vector_search=False — no API keys required. They
-prove that harvested intel can be persisted, frozen into a portable snapshot,
-restored into a fresh instance, and used for keyless Tier 1 detection after
-Bright Data access is gone.
+prove that the ingested pattern set can be persisted, frozen into a portable
+snapshot, restored into a fresh instance, and used for keyless Tier 1 detection.
 """
 
+import json
 from datetime import datetime
 
 import pytest
@@ -167,20 +167,30 @@ class TestDynamicSignatures:
 
 
 # --------------------------------------------------------------------------
-# Offline awareness
+# Dataset ingestion + refresh
 # --------------------------------------------------------------------------
 
-class TestOffline:
-    def test_is_live_false_without_key(self, tmp_path, monkeypatch):
-        # Clear any real key loaded from the shell/.env so the test is hermetic.
-        monkeypatch.delenv("BRIGHT_DATA_API_KEY", raising=False)
-        ti = _ti(tmp_path, bright_data_api_key=None)
-        assert ti.is_live() is False
+class TestDatasetAndRefresh:
+    def test_ingest_dataset_file(self, tmp_path):
+        ti = _ti(tmp_path)
+        ds = tmp_path / "ds.json"
+        ds.write_text(json.dumps([{
+            "pattern_id": "ds1",
+            "description": "Dataset override pattern",
+            "pattern_regex": r"please\s+exfiltrate\s+the\s+vault",
+            "threat_type": "exfiltration",
+            "severity": "high",
+            "source": "dataset",
+        }]))
+        result = ti.ingest_dataset(str(ds))
+        assert result["status"] == "ingested"
+        assert ti.ingester.pattern_count == 1
+        # Promoted to a keyless Tier 1 signature.
+        assert len(ti.get_dynamic_signatures()) == 1
 
-    def test_update_patterns_persists(self, tmp_path, monkeypatch):
+    def test_update_patterns_persists(self, tmp_path):
         ti = _ti(tmp_path)
         ti.add_pattern(_pattern())
-        # No live key → fetch returns []; cycle still persists existing store.
-        result = ti.update_patterns(force=True)
+        result = ti.update_patterns()
         assert result["status"] == "updated"
         assert (tmp_path / "patterns" / "store.json").exists()

@@ -142,9 +142,9 @@ class DualGateRouter:
                     threat_intel.load_mock_patterns()
                     logger.info("DualGateRouter: mock patterns seeded for dev/offline mode")
             self._threat_intel = threat_intel
-            # Harvest dynamic Tier 1 signatures from intel when available. These
-            # run with no API keys, so the detector keeps using harvested data
-            # even after live scraping access is lost.
+            # Collect dynamic Tier 1 signatures from intel when available. These
+            # run with no API keys, so the detector keeps using the ingested
+            # dataset with zero external dependencies.
             dynamic_signatures = self._collect_dynamic_signatures(threat_intel)
             self.detector = ShieldDetector(
                 config=self.config,

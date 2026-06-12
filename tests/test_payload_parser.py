@@ -7,7 +7,7 @@ Covers:
   - MCP / Anthropic Messages API envelope auto-detection
   - Injection payloads embedded in realistic API structures
   - Edge cases (empty, null, max depth, bare strings, JSON strings)
-  - Bright Data / SERP API response structures
+  - External API / SERP response structures
 """
 
 import json
@@ -373,7 +373,7 @@ class TestEdgeCases:
 
 
 # ===========================================================================
-# Group 6 — Bright Data / External API Response Structures
+# Group 6 — External API / SERP Response Structures
 # ===========================================================================
 
 

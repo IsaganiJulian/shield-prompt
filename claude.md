@@ -5,8 +5,8 @@ You are an expert DevSecOps and AI Safety Engineering Assistant. Your objective 
 ---
 
 ## 🎯 Project Core Objectives
-1. **Dynamic Threat Intel:** Continuously update local vector/keyword signatures using real-time security data scraped via **Bright Data APIs**.
-2. **Inline Interception:** Inspect both user queries and incoming raw scraped data *before* the main agent processes them.
+1. **Threat Intel:** Maintain local vector/keyword signatures from a static threat-pattern dataset (or built-in mock seed), indexed for semantic Tier 2 search and promoted into keyless Tier 1 signatures.
+2. **Inline Interception:** Inspect both user queries and incoming raw data *before* the main agent processes them.
 3. **Automated Supervision:** Use an autonomous Security Supervisor Agent to safely auto-remediate minor injection overrides, minimizing human-in-the-loop alert fatigue.
 
 ---
@@ -14,7 +14,7 @@ You are an expert DevSecOps and AI Safety Engineering Assistant. Your objective 
 ## 🛠️ Technical Constraints & Stack
 - **Language:** Python 3.12+ (**STRICTLY FORBIDDEN:** R, NodeJS, Power BI)
 - **Frameworks:** LangChain (Agent Orchestration), Streamlit (Frontend Dashboard)
-- **Integrations:** Bright Data SERP/Web Scraper API (Threat intelligence data sourcing)
+- **Threat intel source:** Static dataset file (JSON) or built-in mock patterns — no live scraping.
 - **Architecture Style:** Decoupled, modular, microservice-inspired. No monolithic scripts.
 
 ---
@@ -28,7 +28,7 @@ Shield-Prompt/
 ├── CLAUDE.md                 # This system memory context file
 ├── README.md                 # Project overview
 ├── requirements.txt          # Python package manifest
-├── .env.example              # Credentials template (Bright Data, OpenAI, Anthropic)
+├── .env.example              # Credentials template (OpenAI, Anthropic)
 │
 ├── src/                      # All application source code
 │   ├── __init__.py
@@ -39,11 +39,10 @@ Shield-Prompt/
 │   │   ├── router.py         # DualGateRouter — structural fast-path + comprehensive scan
 │   │   ├── preprocessor.py   # InputNormalizer — Base64/Unicode/encoding anti-evasion (Phase 1)
 │   │   ├── payload_parser.py # PayloadParser — recursive JSON/MCP field extraction (Phase 2)
-│   │   ├── threat_intel.py   # ThreatIntelligence — Bright Data scraper interface
+│   │   ├── threat_intel.py   # ThreatIntelligence — dataset ingest + snapshot orchestration
 │   │   ├── vector_store.py   # FAISSVectorStore — embedding-based pattern retrieval
 │   │   ├── llm_evaluator.py  # LLMEvaluator — LangChain/Anthropic Tier 2 re-scoring
-│   │   ├── pattern_ingester.py # Ingests scraped threat patterns into the vector store
-│   │   └── bright_data_client.py # Bright Data API client wrapper
+│   │   └── pattern_ingester.py # Ingests threat patterns into the vector store
 │   │
 │   └── dashboard/            # Streamlit Frontend
 │       ├── __init__.py
@@ -67,10 +66,12 @@ Shield-Prompt/
 │   ├── test_preprocessor.py
 │   ├── test_vector_store.py
 │   ├── test_threat_intel.py
-│   ├── test_pattern_ingester.py
-│   └── test_bright_data_client.py
+│   └── test_pattern_ingester.py
+│
+├── scripts/                  # intel.py — dataset/mock/snapshot management CLI
+├── snapshots/                # Portable, git-committed frozen intel bundles
 │
 ├── docs/                     # Phase specifications and architecture notes
 │   └── phases/               # Per-phase design documents (PHASE_1 … PHASE_9)
 │
-└── data/                     # Runtime data (vector index, scraped patterns, logs)
+└── data/                     # Runtime data (vector index, pattern store, logs)

@@ -1,17 +1,17 @@
 # ShieldPrompt: Dynamic Prompt Injection Detection System
 
-Enterprise-grade inline firewall for AI agents, protecting against direct and indirect prompt injection attacks using a real-time, multi-tiered detection pipeline powered by Bright Data threat intelligence.
+Enterprise-grade inline firewall for AI agents, protecting against direct and indirect prompt injection attacks using a multi-tiered detection pipeline backed by a curated threat-pattern dataset.
 
 ## Key Features
 
 - **Multi-Tiered Detection** — Tier 1 lexical (~5-10ms) → Tier 2 LLM semantic → Tier 3 behavioral output analysis
 - **Tier-First Early Exit** — 80-90% of attacks caught in <10ms before expensive processing
 - **Structural Field Optimization** — Metadata (IDs, timestamps) bypass detection; only user-supplied content is scanned
-- **Live Threat Intelligence** — Bright Data SERP/Web Scraper API feeds a FAISS vector store with real-time attack patterns
+- **Dataset-Driven Threat Intel** — A static threat-pattern dataset (or built-in mock seed) feeds a FAISS vector store and keyless Tier 1 dynamic signatures; see [docs/INTEL.md](docs/INTEL.md)
 - **Autonomous Remediation** — SupervisorAgent cascades: sanitization → LLM rewrite → context isolation, with human-in-the-loop escalation
 - **MCP/JSON-RPC Support** — Native support for Model Context Protocol envelopes with JSON path attribution
 - **Streamlit Dashboard** — Live Playground, Detection Console, Evaluation Hub, and Threat Intel viewer
-- **386 Tests Passing** — Full coverage across all tiers and phases
+- **331 Tests Passing** — Full coverage across all tiers and phases
 
 ## Quick Start
 
@@ -29,7 +29,7 @@ streamlit run src/dashboard/app.py
 ```bash
 ANTHROPIC_API_KEY=      # Claude Haiku — LLM re-scoring & supervisor rewriting
 OPENAI_API_KEY=         # text-embedding-3-small — FAISS vector gate
-BRIGHT_DATA_API_KEY=    # Threat intelligence scraping
+DATASET_PATH=           # optional static threat-pattern dataset to ingest on startup
 ```
 
 All keys are optional — the system degrades gracefully to Tier 1 lexical-only mode if keys are absent.
@@ -65,7 +65,7 @@ Raw Input
 | Phase 2 | `PayloadParser` — recursive JSON/MCP field extraction | ✅ Complete |
 | Phase 3 | `DualGateRouter` — structural fast-path + tier synthesis | ✅ Complete |
 | Phase 4 | Streamlit Dashboard — Playground / Detection / Eval / Threat Intel | ✅ Complete |
-| Phase 5 | `BrightDataClient` + `ThreatIntelligence` — live SERP scraping | ✅ Complete |
+| Phase 5 | `ThreatIntelligence` — dataset ingest + snapshot store | ✅ Complete |
 | Phase 6 | `LLMEvaluator` + `FAISSVectorStore` — Tier 2 semantic analysis | ✅ Complete |
 | Phase 7 | `SupervisorAgent` — 3-strategy cascading auto-remediation | ✅ Complete |
 | Phase 8 | Tier 3 behavioral analysis — flooding, drift, multi-vector, repetition | ✅ Complete |
@@ -108,9 +108,8 @@ shield-prompt/
 │   │   ├── supervisor.py          # SupervisorAgent auto-remediation
 │   │   ├── llm_evaluator.py       # Tier 2 LLM re-scoring
 │   │   ├── vector_store.py        # FAISS vector store
-│   │   ├── threat_intel.py        # Threat intelligence interface
-│   │   ├── pattern_ingester.py    # Ingests scraped patterns into FAISS
-│   │   └── bright_data_client.py  # Bright Data API client
+│   │   ├── threat_intel.py        # Dataset ingest + snapshot orchestration
+│   │   └── pattern_ingester.py    # Ingests patterns into FAISS
 │   └── dashboard/
 │       ├── app.py                 # Streamlit entry point
 │       ├── playground.py          # Live Ingress Playground
@@ -159,7 +158,6 @@ python tests/evaluate.py           # KPI benchmark (TPR/FPR/F1/latency)
 - **Anthropic Claude** — LLM semantic re-scoring and supervisor rewriting
 - **OpenAI Embeddings** — FAISS vector store indexing
 - **FAISS** — local vector similarity search
-- **Bright Data** — real-time threat intelligence scraping
 - **Streamlit** — security operations dashboard
 - **Pydantic** — data validation
 

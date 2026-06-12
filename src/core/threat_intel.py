@@ -1,15 +1,15 @@
 """
 Threat Intelligence Module - Orchestration Layer
 
-Wires BrightDataClient, PatternIngester, and VectorStore into a single
-unified interface. Responsibilities:
-    - Schedule and execute pattern update cycles (hourly by default)
-    - Manage full pattern lifecycle: fetch → ingest → prune → vector sync
+Wires PatternIngester and VectorStore into a single unified interface.
+Threat patterns come from a static dataset file or built-in mock patterns
+(no live scraping). Responsibilities:
+    - Ingest patterns from a dataset file or mock seed
+    - Manage pattern lifecycle: ingest → vector sync → persist
     - Expose pattern queries and semantic search to Shield Tier 2
-    - Provide export/import for offline or CI use
+    - Provide snapshot export/import for portability and CI use
 
 Import hierarchy (no circular deps):
-    threat_intel  ->  bright_data_client
     threat_intel  ->  pattern_ingester  ->  threat_intel.ThreatPattern
     threat_intel  ->  vector_store      ->  threat_intel.ThreatPattern
 """
@@ -18,7 +18,7 @@ import json
 import logging
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -52,12 +52,13 @@ class ThreatIntelligence:
     Unified threat intelligence orchestrator.
 
     Owns and coordinates:
-        client   — BrightDataClient  (live scraping)
         ingester — PatternIngester   (normalise, deduplicate, persist)
         vector   — VectorStore       (semantic similarity search)
 
     Public surface used by Shield Tier 2:
-        update_patterns()       — run a full fetch/ingest/sync cycle
+        ingest_dataset()        — load patterns from a static dataset file
+        load_mock_patterns()    — seed built-in mock patterns
+        update_patterns()       — re-sync the vector index and persist
         get_patterns_by_type()  — filtered pattern query
         get_high_severity_patterns()
         search_similar()        — semantic ANN search via VectorStore
@@ -72,34 +73,22 @@ class ThreatIntelligence:
         """
         Args:
             config keys (all optional, fall back to environment variables):
-                bright_data_api_key / bright_data_username / bright_data_password
                 openai_api_key
                 embedding_model             (default: text-embedding-3-small)
                 pattern_store_path          (default: ./data/patterns/pattern_store.json)
                 vector_store_path           (default: ./data/vector_store/)
+                dataset_path                (optional static dataset to ingest on init)
                 enable_vector_search        (default: True)
-                threat_intel_update_interval (seconds, default: 3600)
                 retention_days              (default: 90)
                 min_severity                (default: "low")
-                limit_per_source            (default: 50)
                 use_mock_patterns           (default: False)
         """
-        from src.core.bright_data_client import BrightDataClient
         from src.core.pattern_ingester import PatternIngester
         from src.core.vector_store import VectorStore
 
         self.config = config or {}
 
         # ---------- sub-components ----------
-        self.client = BrightDataClient({
-            "bright_data_api_key":   self.config.get("bright_data_api_key"),
-            "bright_data_username":  self.config.get("bright_data_username"),
-            "bright_data_password":  self.config.get("bright_data_password"),
-            "rate_limit_per_min":    self.config.get("rate_limit_per_min", 100),
-            "request_timeout_sec":   self.config.get("request_timeout_sec", 30),
-            "max_retries":           self.config.get("max_retries", 3),
-        })
-
         self.ingester = PatternIngester({
             "store_path":      self.config.get(
                 "pattern_store_path", "./data/patterns/pattern_store.json"
@@ -119,12 +108,9 @@ class ThreatIntelligence:
             "enable_vector_search": self.config.get("enable_vector_search", True),
         })
 
-        # ---------- scheduling state ----------
-        self.update_interval: int = self.config.get(
-            "threat_intel_update_interval", 3600
-        )
-        self.limit_per_source: int = self.config.get("limit_per_source", 50)
+        # ---------- state ----------
         self.last_update: Optional[datetime] = None
+        self.dataset_path: Optional[str] = self.config.get("dataset_path")
 
         # ---------- persistence paths ----------
         self.pattern_store_path: str = self.config.get(
@@ -138,13 +124,9 @@ class ThreatIntelligence:
             "snapshot_dir", _os.getenv("SNAPSHOT_DIR", "./snapshots")
         )
 
-        # ---------- v1 compat ----------
-        # Kept for callers that reference self.bright_data_api_key directly
-        self.bright_data_api_key = self.config.get("bright_data_api_key")
-
-        # Auto-load any persisted intel from disk so harvested patterns survive
-        # restarts (and the eventual loss of Bright Data access). Guarded by file
-        # existence — a clean checkout with no warm cache is a no-op.
+        # Auto-load any persisted intel from disk so the ingested pattern set
+        # survives restarts. Guarded by file existence — a clean checkout with
+        # no warm cache is a no-op.
         auto_load = self.config.get(
             "auto_load_on_init",
             _os.getenv("AUTO_LOAD_ON_INIT", "true").lower() != "false",
@@ -152,28 +134,18 @@ class ThreatIntelligence:
         if auto_load:
             self._auto_load()
 
+        # Ingest a static dataset file when configured.
+        if self.dataset_path:
+            self.ingest_dataset(self.dataset_path)
+
         if self.config.get("use_mock_patterns", False):
             self.load_mock_patterns()
 
         logger.info("ThreatIntelligence initialized")
 
     # ------------------------------------------------------------------
-    # Offline / liveness
+    # Warm-cache loading
     # ------------------------------------------------------------------
-
-    def is_live(self) -> bool:
-        """
-        True when Bright Data scraping is currently available.
-
-        When this returns False the system is in *frozen* mode: it serves the
-        last harvested snapshot and cannot fetch new intel. Detection still works
-        (Tier 1 dynamic signatures need no keys; Tier 2 vector search needs only
-        the OpenAI embedding key against the already-embedded snapshot).
-        """
-        try:
-            return bool(self.client.is_healthy())
-        except Exception:
-            return False
 
     def _auto_load(self) -> None:
         """Load persisted pattern store + vector index from disk if present."""
@@ -193,31 +165,67 @@ class ThreatIntelligence:
     # Pattern lifecycle
     # ------------------------------------------------------------------
 
-    def fetch_latest_threats(self) -> List[ThreatPattern]:
+    def ingest_dataset(self, filepath: str) -> Dict[str, Any]:
         """
-        Fetch new patterns from all Bright Data sources, ingest them,
-        and sync to the vector store.
+        Ingest threat patterns from a static dataset file (JSON).
+
+        The dataset is a JSON object or list of pattern records matching the
+        ThreatPattern fields (pattern_id, description, pattern_regex, threat_type,
+        severity, source, references). This replaces the old live-scraping intake
+        — drop a purchased/curated dataset here and it flows through the same
+        ingest → vector-sync → persist pipeline.
 
         Returns:
-            All patterns retrieved in this fetch (new + updated).
+            Dict with ingestion counts, or an error status.
         """
-        logger.info("Fetching latest threats from Bright Data")
-        patterns = self.client.fetch_all_patterns(self.limit_per_source)
-        if not patterns:
-            logger.info("No patterns returned from Bright Data sources")
-            return []
+        path = Path(filepath)
+        if not path.exists():
+            logger.warning("Dataset file not found: %s", path)
+            return {"status": "error", "error": f"not found: {filepath}"}
+
+        try:
+            with path.open(encoding="utf-8") as fh:
+                raw = json.load(fh)
+        except Exception as exc:
+            logger.error("Failed to read dataset %s: %s", path, exc)
+            return {"status": "error", "error": str(exc)}
+
+        records = raw.values() if isinstance(raw, dict) else raw
+        now = datetime.now()
+        patterns: List[ThreatPattern] = []
+        for rec in records:
+            try:
+                patterns.append(ThreatPattern(
+                    pattern_id=rec["pattern_id"],
+                    description=rec.get("description", ""),
+                    pattern_regex=rec.get("pattern_regex", ""),
+                    threat_type=rec.get("threat_type", "injection"),
+                    severity=rec.get("severity", "medium"),
+                    first_seen=datetime.fromisoformat(rec["first_seen"])
+                        if rec.get("first_seen") else now,
+                    last_updated=datetime.fromisoformat(rec["last_updated"])
+                        if rec.get("last_updated") else now,
+                    source=rec.get("source", "dataset"),
+                    references=rec.get("references", []),
+                ))
+            except Exception as exc:
+                logger.warning("Skipping malformed dataset record: %s", exc)
 
         result = self.ingester.ingest(patterns)
-        logger.info(
-            "Ingested %d patterns: %d new, %d updated, %d rejected",
-            result.total_received, result.new_patterns,
-            result.updated_patterns, result.rejected_patterns,
-        )
-
         if result.new_patterns > 0 or result.updated_patterns > 0:
             self._sync_all_to_vector_store()
-
-        return patterns
+            self._persist_all()
+        logger.info(
+            "Dataset ingested from %s: %d new, %d updated",
+            path, result.new_patterns, result.updated_patterns,
+        )
+        return {
+            "status": "ingested",
+            "patterns_received": result.total_received,
+            "patterns_new": result.new_patterns,
+            "patterns_updated": result.updated_patterns,
+            "patterns_total": self.ingester.pattern_count,
+        }
 
     def add_pattern(self, pattern: ThreatPattern) -> None:
         """
@@ -245,47 +253,23 @@ class ThreatIntelligence:
 
     def update_patterns(self, force: bool = False) -> Dict[str, Any]:
         """
-        Run a full fetch → ingest → prune → vector-sync cycle.
+        Re-sync the current pattern set to the vector index and persist to disk.
 
-        Skips the cycle if the update interval has not elapsed, unless
-        ``force=True`` is passed.
+        With live scraping removed, this no longer fetches new intel — it
+        rebuilds the searchable index from whatever has been ingested (dataset
+        or mock) and writes the warm cache. New intel enters via ingest_dataset().
 
         Args:
-            force: Skip the interval check and update immediately.
+            force: Accepted for backwards compatibility; ignored.
 
         Returns:
-            Dict with status, counts, timing, and next-update timestamp.
+            Dict with status, counts, and timing.
         """
         now = datetime.now()
-
-        if not force and self.last_update is not None:
-            elapsed = (now - self.last_update).total_seconds()
-            if elapsed < self.update_interval:
-                remaining = self.update_interval - elapsed
-                logger.debug(
-                    "update_patterns skipped (next update in %.0fs)", remaining
-                )
-                return {
-                    "status": "skipped",
-                    "reason": f"Next update in {remaining:.0f}s",
-                    "last_update": self.last_update.isoformat(),
-                    "next_update": (
-                        self.last_update + timedelta(seconds=self.update_interval)
-                    ).isoformat(),
-                }
-
         t_start = time.monotonic()
 
         try:
-            patterns = self.client.fetch_all_patterns(self.limit_per_source)
-            ingest_result = self.ingester.ingest(patterns)
-            # Only prune when a live fetch actually returned data. Otherwise an
-            # offline run (no Bright Data access) would age-out and delete the
-            # frozen intel we are trying to preserve.
-            pruned = self.ingester.prune() if patterns else 0
             vectors_synced = self._sync_all_to_vector_store()
-            # Durably persist after every cycle so harvested intel survives a
-            # restart — and the eventual loss of Bright Data access.
             self._persist_all()
         except Exception as exc:
             logger.error("update_patterns failed: %s", exc)
@@ -300,17 +284,10 @@ class ThreatIntelligence:
 
         return {
             "status": "updated",
-            "patterns_fetched":  ingest_result.total_received,
-            "patterns_new":      ingest_result.new_patterns,
-            "patterns_updated":  ingest_result.updated_patterns,
-            "patterns_pruned":   pruned,
             "vectors_synced":    vectors_synced,
             "patterns_total":    self.ingester.pattern_count,
             "duration_ms":       round(duration_ms, 1),
             "last_update":       now.isoformat(),
-            "next_update":       (
-                now + timedelta(seconds=self.update_interval)
-            ).isoformat(),
         }
 
     def _persist_all(self) -> None:
@@ -336,8 +313,8 @@ class ThreatIntelligence:
             manifest.json    — counts, timestamp, source breakdown
         Also refreshes the ``<snapshot_dir>/latest`` pointer.
 
-        These bundles are meant to be committed to git so the harvested intel
-        outlives Bright Data access.
+        These bundles are meant to be committed to git so a frozen intel set is
+        portable across machines and reproducible in CI.
 
         Returns:
             Path to the written snapshot directory.
@@ -540,7 +517,6 @@ class ThreatIntelligence:
         stats["last_update"] = (
             self.last_update.isoformat() if self.last_update else None
         )
-        stats["update_interval_sec"] = self.update_interval
         return stats
 
     # ------------------------------------------------------------------

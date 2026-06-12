@@ -1,13 +1,15 @@
 """
 Threat Intelligence Dashboard Tab
 
-Surfaces Phase 5 Bright Data integration to the Streamlit UI:
-    - Feed status banner (last update, next update, pattern count)
+Surfaces the threat-intelligence store to the Streamlit UI:
+    - Feed status banner (last update, pattern count)
     - KPI row: total patterns / high-critical count / vector index size / mode
-    - Feed controls: live fetch + mock fallback
+    - Feed controls: rebuild index + mock seed
     - Pattern browser with type / severity / source filters
     - Semantic similarity search via VectorStore
     - Raw stats expander
+
+Patterns come from a static dataset or built-in mock seed (no live scraping).
 """
 
 from __future__ import annotations
@@ -56,7 +58,7 @@ def _get_threat_intel() -> Optional[Any]:
 
     The instance is created once via _build_threat_intel() (@st.cache_resource)
     and stored in st.session_state.threat_intel so both the detection router
-    and this tab operate on the same pattern store.  Patterns fetched here are
+    and this tab operate on the same pattern store.  Patterns rebuilt here are
     immediately visible to the Tier 2 vector gate.
     """
     return st.session_state.get("threat_intel")
@@ -110,7 +112,6 @@ def _source_badge(source: str) -> str:
 def _render_feed_status(stats: Dict[str, Any]) -> None:
     """Top banner showing feed health and timing."""
     last_update = stats.get("last_update")
-    update_interval = stats.get("update_interval_sec", 3600)
     total = stats.get("total", 0)
     vector_info = stats.get("vector_store", {})
     vector_enabled = vector_info.get("enabled", False)
@@ -118,7 +119,7 @@ def _render_feed_status(stats: Dict[str, Any]) -> None:
     mock_loaded = st.session_state.ti_mock_loaded
 
     # Status pill
-    mode_label = "MOCK MODE" if mock_loaded else "LIVE MODE"
+    mode_label = "MOCK MODE" if mock_loaded else "DATASET MODE"
     mode_bg = "#6366F1" if mock_loaded else "#10B981"
 
     col_status, col_last, col_next, col_vec = st.columns(4)
@@ -150,11 +151,10 @@ def _render_feed_status(stats: Dict[str, Any]) -> None:
         )
 
     with col_next:
-        interval_min = update_interval // 60
         st.markdown(
             f'<div style="text-align:center;">'
-            f'<div style="font-size:11px;color:#94A3B8;margin-bottom:4px;">Update Interval</div>'
-            f'<div style="font-size:16px;font-weight:700;color:#E2E8F0;">{interval_min}m</div>'
+            f'<div style="font-size:11px;color:#94A3B8;margin-bottom:4px;">Total Patterns</div>'
+            f'<div style="font-size:16px;font-weight:700;color:#E2E8F0;">{total}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -206,25 +206,23 @@ def _render_feed_controls(ti: Any) -> None:
     col_live, col_mock, col_export = st.columns(3)
 
     with col_live:
-        if st.button("FETCH LATEST THREATS", use_container_width=True, type="primary"):
-            with st.spinner("Querying Bright Data…"):
+        if st.button("REBUILD INDEX", use_container_width=True, type="primary"):
+            with st.spinner("Re-syncing vector index…"):
                 try:
-                    result = ti.update_patterns(force=True)
+                    result = ti.update_patterns()
                     st.session_state.ti_last_result = result
                     st.session_state.ti_fetch_error = None
                     if result.get("status") == "updated":
                         st.toast(
-                            f"Feed updated — {result['patterns_new']} new, "
-                            f"{result['patterns_updated']} updated",
+                            f"Index rebuilt — {result['patterns_total']} patterns, "
+                            f"{result['vectors_synced']} vectors synced",
                             icon="✅",
                         )
-                    elif result.get("status") == "skipped":
-                        st.toast(result.get("reason", "Skipped"), icon="ℹ️")
                     else:
                         st.toast(f"Error: {result.get('error', 'unknown')}", icon="⚠️")
                 except Exception as exc:
                     st.session_state.ti_fetch_error = str(exc)
-                    st.toast(f"Fetch failed: {exc}", icon="❌")
+                    st.toast(f"Rebuild failed: {exc}", icon="❌")
 
     with col_mock:
         if st.button("LOAD MOCK PATTERNS", use_container_width=True):
@@ -260,20 +258,17 @@ def _render_feed_controls(ti: Any) -> None:
                 use_container_width=True,
             )
 
-    # Show last fetch result
+    # Show last rebuild result
     last = st.session_state.ti_last_result
     err = st.session_state.ti_fetch_error
     if err:
         st.error(f"Feed error: {err}")
     elif last and last.get("status") == "updated":
         st.success(
-            f"Last fetch: **{last['patterns_new']} new** · "
-            f"**{last['patterns_updated']} updated** · "
-            f"**{last['patterns_pruned']} pruned** · "
+            f"Index rebuilt: **{last['patterns_total']} patterns** · "
+            f"**{last['vectors_synced']} vectors synced** · "
             f"{last['duration_ms']:.0f}ms"
         )
-    elif last and last.get("status") == "skipped":
-        st.info(f"Feed check skipped — {last.get('reason', '')}")
 
 
 def _render_pattern_browser(ti: Any) -> None:
@@ -317,7 +312,7 @@ def _render_pattern_browser(ti: Any) -> None:
         return
 
     if not patterns:
-        st.info("No patterns match the selected filters. Try loading mock patterns or fetching live data.")
+        st.info("No patterns match the selected filters. Try loading mock patterns or ingesting a dataset.")
         return
 
     st.caption(f"Showing {min(len(patterns), max_display)} of {len(patterns)} patterns")
@@ -432,7 +427,7 @@ def render_threat_intel_page() -> None:
     from src.dashboard.components import render_header_section
     render_header_section()
     st.markdown('<div class="sp-section-label">THREAT INTELLIGENCE</div>', unsafe_allow_html=True)
-    st.caption("Live threat pattern updates from CVEs, GitHub advisory feeds, and security research via Bright Data.")
+    st.caption("Threat pattern store ingested from a static dataset or built-in mock seed, indexed for Tier 2 semantic search.")
 
     _init_page_state()
 

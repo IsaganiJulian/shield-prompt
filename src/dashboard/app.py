@@ -51,7 +51,7 @@ def _build_threat_intel():
 
     Using @st.cache_resource means Streamlit returns the same object to every
     caller within the same server process — the detection router and the Threat
-    Intel dashboard tab share one instance, so patterns fetched via the UI are
+    Intel dashboard tab share one instance, so patterns ingested via the UI are
     immediately available to the Tier 2 vector gate.
     """
     try:

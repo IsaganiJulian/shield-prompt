@@ -2,12 +2,13 @@
 Unit tests for ThreatIntelligence (orchestration layer).
 
 Construction strategy: build a real ThreatIntelligence with
-enable_vector_search=False (skips FAISS/OpenAI init), then replace the three
-sub-components (client, ingester, vector_store) with MagicMock instances.
+enable_vector_search=False (skips FAISS/OpenAI init), then replace the two
+sub-components (ingester, vector_store) with MagicMock instances.
 This avoids patching deferred imports and keeps tests fast and offline.
 """
 
-from datetime import datetime, timedelta
+import json
+from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -61,7 +62,6 @@ def _make_ti(**extra_config) -> ThreatIntelligence:
     """
     inst = ThreatIntelligence(config={"enable_vector_search": False, **extra_config})
 
-    inst.client = MagicMock()
     inst.ingester = MagicMock()
     inst.vector_store = MagicMock()
 
@@ -78,8 +78,6 @@ def _make_ti(**extra_config) -> ThreatIntelligence:
     inst.vector_store.add_patterns.return_value = 0
     inst.vector_store.search.return_value = []
 
-    inst.client.fetch_all_patterns.return_value = []
-
     return inst
 
 
@@ -93,30 +91,12 @@ def ti() -> ThreatIntelligence:
 # ---------------------------------------------------------------------------
 
 class TestInit:
-    def test_creates_three_sub_components(self, ti):
-        assert ti.client is not None
+    def test_creates_two_sub_components(self, ti):
         assert ti.ingester is not None
         assert ti.vector_store is not None
 
-    def test_default_update_interval(self, ti):
-        assert ti.update_interval == 3600
-
-    def test_custom_update_interval(self):
-        inst = ThreatIntelligence(config={
-            "enable_vector_search": False,
-            "threat_intel_update_interval": 600,
-        })
-        assert inst.update_interval == 600
-
     def test_last_update_none_on_init(self, ti):
         assert ti.last_update is None
-
-    def test_bright_data_api_key_compat_field(self):
-        inst = ThreatIntelligence(config={
-            "enable_vector_search": False,
-            "bright_data_api_key": "bdk-test",
-        })
-        assert inst.bright_data_api_key == "bdk-test"
 
     def test_use_mock_patterns_loads_real_patterns(self):
         # Construct with real sub-components; mock patterns are baked into PatternIngester
@@ -151,46 +131,45 @@ class TestPatternsProperty:
 
 
 # ---------------------------------------------------------------------------
-# fetch_latest_threats
+# ingest_dataset
 # ---------------------------------------------------------------------------
 
-class TestFetchLatestThreats:
-    def test_calls_client_then_ingests(self, ti):
-        patterns = [_make_pattern("p1"), _make_pattern("p2")]
-        ti.client.fetch_all_patterns.return_value = patterns
-        ti.ingester.ingest.return_value = _make_ingestion_result(
-            total=2, new=2, updated=0
-        )
+class TestIngestDataset:
+    def test_missing_file_returns_error(self, ti):
+        result = ti.ingest_dataset("/nonexistent/patterns.json")
+        assert result["status"] == "error"
 
-        result = ti.fetch_latest_threats()
+    def test_ingests_records_and_syncs(self, ti, tmp_path):
+        ti.ingester.ingest.return_value = _make_ingestion_result(total=1, new=1, updated=0)
+        ti.ingester.get_patterns.return_value = [_make_pattern()]
+        ds = tmp_path / "patterns.json"
+        ds.write_text(json.dumps([{
+            "pattern_id": "ds1",
+            "description": "Dataset injection pattern",
+            "pattern_regex": r"(?i)ignore.*instructions",
+            "threat_type": "injection",
+            "severity": "high",
+            "source": "dataset",
+        }]))
 
-        ti.client.fetch_all_patterns.assert_called_once_with(ti.limit_per_source)
-        ti.ingester.ingest.assert_called_once_with(patterns)
-        assert result == patterns
+        result = ti.ingest_dataset(str(ds))
 
-    def test_syncs_to_vector_store_when_patterns_new(self, ti):
-        patterns = [_make_pattern()]
-        ti.client.fetch_all_patterns.return_value = patterns
-        ti.ingester.ingest.return_value = _make_ingestion_result(new=1, updated=0)
-        ti.ingester.get_patterns.return_value = patterns
-
-        ti.fetch_latest_threats()
-
+        ti.ingester.ingest.assert_called_once()
+        # One ThreatPattern parsed from the record and passed to ingest.
+        passed = ti.ingester.ingest.call_args[0][0]
+        assert len(passed) == 1
+        assert passed[0].pattern_id == "ds1"
+        assert result["status"] == "ingested"
         ti.vector_store.add_patterns.assert_called()
 
-    def test_no_vector_sync_when_nothing_new(self, ti):
-        ti.client.fetch_all_patterns.return_value = []
-        ti.fetch_latest_threats()
-        ti.vector_store.add_patterns.assert_not_called()
-
-    def test_returns_empty_when_client_returns_empty(self, ti):
-        ti.client.fetch_all_patterns.return_value = []
-        assert ti.fetch_latest_threats() == []
-
-    def test_no_ingest_call_when_empty(self, ti):
-        ti.client.fetch_all_patterns.return_value = []
-        ti.fetch_latest_threats()
-        ti.ingester.ingest.assert_not_called()
+    def test_accepts_dict_keyed_records(self, ti, tmp_path):
+        ti.ingester.ingest.return_value = _make_ingestion_result(total=1, new=1, updated=0)
+        ds = tmp_path / "patterns.json"
+        ds.write_text(json.dumps({
+            "ds1": {"pattern_id": "ds1", "severity": "low", "threat_type": "bypass"}
+        }))
+        result = ti.ingest_dataset(str(ds))
+        assert result["status"] == "ingested"
 
 
 # ---------------------------------------------------------------------------
@@ -243,73 +222,40 @@ class TestLoadMockPatterns:
 # ---------------------------------------------------------------------------
 
 class TestUpdatePatterns:
-    def test_runs_full_cycle_and_returns_updated(self, ti):
-        ti.client.fetch_all_patterns.return_value = [_make_pattern()]
-        result = ti.update_patterns(force=True)
-        ti.client.fetch_all_patterns.assert_called_once()
-        ti.ingester.ingest.assert_called_once()
-        ti.ingester.prune.assert_called_once()
+    """update_patterns() now re-syncs the vector index and persists (no fetch)."""
+
+    def test_syncs_and_returns_updated(self, ti):
+        ti.ingester.get_patterns.return_value = [_make_pattern()]
+        result = ti.update_patterns()
+        ti.vector_store.add_patterns.assert_called()
         assert result["status"] == "updated"
 
-    def test_skips_when_interval_not_elapsed(self, ti):
-        ti.last_update = datetime.now() - timedelta(seconds=100)
-        ti.update_interval = 3600
-        result = ti.update_patterns(force=False)
-        assert result["status"] == "skipped"
-        ti.client.fetch_all_patterns.assert_not_called()
-
-    def test_force_bypasses_interval(self, ti):
-        ti.last_update = datetime.now() - timedelta(seconds=10)
-        ti.update_interval = 3600
-        ti.client.fetch_all_patterns.return_value = []
-        result = ti.update_patterns(force=True)
-        assert result["status"] == "updated"
-        ti.client.fetch_all_patterns.assert_called_once()
+    def test_persists_after_sync(self, ti):
+        ti.update_patterns()
+        ti.ingester.persist.assert_called()
+        ti.vector_store.persist.assert_called()
 
     def test_updates_last_update_timestamp(self, ti):
-        ti.client.fetch_all_patterns.return_value = []
         before = datetime.now()
-        ti.update_patterns(force=True)
+        ti.update_patterns()
         assert ti.last_update is not None
         assert ti.last_update >= before
 
     def test_returns_error_status_on_exception(self, ti):
-        ti.client.fetch_all_patterns.side_effect = RuntimeError("network failure")
-        result = ti.update_patterns(force=True)
+        ti.vector_store.add_patterns.side_effect = RuntimeError("sync failure")
+        ti.ingester.get_patterns.return_value = [_make_pattern()]
+        result = ti.update_patterns()
         assert result["status"] == "error"
-        assert "network failure" in result["error"]
+        assert "sync failure" in result["error"]
 
-    def test_error_does_not_update_last_update(self, ti):
-        ti.client.fetch_all_patterns.side_effect = RuntimeError("fail")
-        ti.update_patterns(force=True)
-        assert ti.last_update is None
-
-    def test_result_contains_all_expected_keys(self, ti):
-        ti.client.fetch_all_patterns.return_value = []
-        result = ti.update_patterns(force=True)
-        for key in (
-            "status", "patterns_fetched", "patterns_new", "patterns_updated",
-            "patterns_pruned", "vectors_synced", "duration_ms",
-            "last_update", "next_update",
-        ):
+    def test_result_contains_expected_keys(self, ti):
+        result = ti.update_patterns()
+        for key in ("status", "vectors_synced", "patterns_total",
+                    "duration_ms", "last_update"):
             assert key in result, f"Missing key: {key}"
 
-    def test_skipped_result_contains_timing_keys(self, ti):
-        ti.last_update = datetime.now()
-        result = ti.update_patterns(force=False)
-        assert "last_update" in result
-        assert "next_update" in result
-        assert "reason" in result
-
-    def test_runs_when_last_update_is_none(self, ti):
-        ti.last_update = None
-        ti.client.fetch_all_patterns.return_value = []
-        result = ti.update_patterns(force=False)
-        assert result["status"] == "updated"
-
     def test_duration_ms_in_result(self, ti):
-        ti.client.fetch_all_patterns.return_value = []
-        result = ti.update_patterns(force=True)
+        result = ti.update_patterns()
         assert isinstance(result["duration_ms"], float)
         assert result["duration_ms"] >= 0
 
@@ -379,10 +325,6 @@ class TestGetPatternStats:
     def test_last_update_none_when_never_run(self, ti):
         ti.last_update = None
         assert ti.get_pattern_stats()["last_update"] is None
-
-    def test_update_interval_in_stats(self, ti):
-        ti.update_interval = 1800
-        assert ti.get_pattern_stats()["update_interval_sec"] == 1800
 
 
 # ---------------------------------------------------------------------------

@@ -2,10 +2,9 @@
 Shared pytest fixtures and test-suite hygiene.
 
 Keeps the suite hermetic: tests must not read the developer's real warm cache
-under ./data (which exists after a live harvest) or make incidental API calls
-because of it. This autouse fixture disables intel auto-load and points the
-snapshot dir at a throwaway location for every test, unless a test sets these
-explicitly via its own config.
+under ./data or make incidental API calls because of it. This autouse fixture
+disables intel auto-load and points the snapshot dir at a throwaway location for
+every test, unless a test sets these explicitly via its own config.
 """
 
 import pytest
@@ -17,7 +16,4 @@ def _hermetic_intel_env(monkeypatch, tmp_path):
     # ingests/embeds the real ./data warm cache during tests.
     monkeypatch.setenv("AUTO_LOAD_ON_INIT", "false")
     monkeypatch.setenv("SNAPSHOT_DIR", str(tmp_path / "snapshots"))
-    # Never let a test perform a real live scrape because the developer's shell
-    # happens to have a Bright Data key. Tests that need a key set their own.
-    monkeypatch.delenv("BRIGHT_DATA_API_KEY", raising=False)
     yield

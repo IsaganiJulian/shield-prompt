@@ -138,10 +138,10 @@ class ShieldDetector:
                            When None, Tier 2 returns CLEAN/0.0 immediately.
             llm_evaluator: Optional LLMEvaluator for Tier 2 LLM re-scoring.
                            When None, Tier 2 falls back to raw vector scores.
-            dynamic_signatures: Optional {name: regex} harvested from threat intel.
+            dynamic_signatures: Optional {name: regex} sourced from threat intel.
                            Merged into Tier 1 lexical analysis. These run with no
-                           API keys, so detection keeps improving from harvested
-                           data even after live scraping access is lost.
+                           API keys, so detection keeps improving from the
+                           ingested dataset with zero external dependencies.
         """
         self.config = config or {}
         self.detection_threshold = self.config.get("detection_threshold", 0.85)
